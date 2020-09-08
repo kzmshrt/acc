@@ -4,7 +4,6 @@ import (
 	"log"
 	"os"
 
-	"github.com/kzmshrt/acc/cmd/acc/command"
 	"github.com/urfave/cli/v2"
 )
 
@@ -20,12 +19,12 @@ func main() {
 			{
 				Name:   "submit",
 				Usage:  "submit answer",
-				Action: command.Submit,
+				Action: Submit,
 			},
 			{
 				Name:   "test",
 				Usage:  "test answer",
-				Action: command.Test,
+				Action: Test,
 			},
 		},
 	}

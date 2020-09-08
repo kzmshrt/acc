@@ -9,4 +9,5 @@ require (
 	github.com/onsi/ginkgo v1.14.0 // indirect
 	github.com/sclevine/agouti v3.0.0+incompatible
 	github.com/urfave/cli/v2 v2.2.0
+	golang.org/x/net v0.0.0-20200520004742-59133d7f0dd7
 )
