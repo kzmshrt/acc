@@ -1,7 +1,7 @@
 package command
 
 import (
-	"log"
+	"errors"
 
 	"github.com/kzmshrt/acc"
 	"github.com/urfave/cli/v2"
@@ -9,15 +9,15 @@ import (
 
 func Submit(c *cli.Context) error {
 	if c.NArg() < 2 {
-		log.Println(c.Command.UsageText)
-		c.Done()
+		return errors.New(c.Command.UsageText)
 	}
 
-	filename, url := c.Args().Get(0), c.Args().Get(1)
+	filename := c.Args().Get(0)
+	url := c.Args().Get(1)
 
-	_, err := acc.Submit(url, filename)
+	_, err := acc.Submit(filename, url)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	return nil

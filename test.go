@@ -13,7 +13,7 @@ import (
 	"github.com/logrusorgru/aurora"
 )
 
-func Test(url, filename string) error {
+func Test(filename, url string) error {
 	testCases, err := getTestCases(url)
 	if err != nil {
 		return err

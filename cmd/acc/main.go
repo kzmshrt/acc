@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -10,30 +9,27 @@ import (
 )
 
 const (
-	AppName = "acc"
+	Name = "acc"
 )
 
 func main() {
-	acc := &cli.App{
-		Name:  AppName,
+	app := &cli.App{
+		Name:  Name,
 		Usage: "AtCoder Client",
 		Commands: []*cli.Command{
 			{
-				Name:      "test",
-				Usage:     "test code with samples on question page",
-				UsageText: fmt.Sprintf("test <filename> <url>"),
-				Action:    command.Test,
+				Name:   "submit",
+				Usage:  "submit answer",
+				Action: command.Submit,
 			},
 			{
-				Name:      "submit",
-				Usage:     "submit code",
-				UsageText: fmt.Sprintf("submit <filename> <url>"),
-				Action:    command.Submit,
+				Name:   "test",
+				Usage:  "test answer",
+				Action: command.Test,
 			},
 		},
 	}
-	err := acc.Run(os.Args)
-	if err != nil {
+	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
 	}
 }
