@@ -1,7 +1,5 @@
 package atcoder
 
-import "time"
-
 type SubmissionStatus int
 
 const (
@@ -42,7 +40,7 @@ func (s SubmissionStatus) String() string {
 type Submission struct {
 	Status      SubmissionStatus
 	CodeLength  int
-	TimeScore   time.Duration
+	TimeScore   int
 	MemoryScore int
 	DetailUrl   string
 }

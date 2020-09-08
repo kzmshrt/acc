@@ -1,6 +1,7 @@
 package atcoder
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,7 +13,6 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	"golang.org/x/net/publicsuffix"
 )
 
 type RESTClient struct {
@@ -28,9 +28,7 @@ func NewRESTClient() (*RESTClient, error) {
 		return nil, err
 	}
 
-	jar, err := cookiejar.New(&cookiejar.Options{
-		PublicSuffixList: publicsuffix.List,
-	})
+	jar, err := cookiejar.New(nil)
 	if err != nil {
 		return nil, err
 	}
@@ -66,56 +64,60 @@ func (c *RESTClient) getCsrfToken(resBody io.Reader, formSelectorStr string) (st
 	if err != nil {
 		return "", err
 	}
-	token, exists := doc.
-		Find(formSelectorStr).
-		Find(fmt.Sprintf("input[name=\"%s\"]", "csrf_token")).
-		Attr("value")
-	if !exists {
-		return "", fmt.Errorf("cannot find input[name=csrf_token]")
+	attributes := doc.Find(formSelectorStr).Find("input[name='csrf_token']").Nodes[0].Attr
+	for _, attr := range attributes {
+		if attr.Key == "value" {
+			return attr.Val, nil
+		}
 	}
-	return token, nil
+	return "", errors.New("cannot find csrf_token")
 }
 
 func (c *RESTClient) buildLoginForm(csrfToken string) *url.Values {
-	form := new(url.Values)
+	form := make(url.Values)
 	form.Set("username", c.username)
 	form.Set("password", c.password)
 	form.Set("csrf_token", csrfToken)
-	return form
+	return &form
 }
 
-func (c *RESTClient) Authenticate() error {
+func (c *RESTClient) Authenticate() (*http.Response, error) {
+	// get token
 	req, err := c.newRequest(http.MethodGet, "/login", nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	res, err := c.client.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	csrfToken, err := c.getCsrfToken(res.Body, "form[action='']")
 	if err != nil {
-		return err
+		return nil, err
 	}
+
+	// post login
 	loginForm := c.buildLoginForm(csrfToken)
 	req, err = c.newRequest(http.MethodPost, "/login", strings.NewReader(loginForm.Encode()))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	_, err = c.client.Do(req)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	res, err = c.client.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+
+	return res, nil
 }
 
 func (c *RESTClient) buildSubmitForm(answer *Answer, problem *Problem, csrfToken string) *url.Values {
-	form := new(url.Values)
+	form := make(url.Values)
 	form.Set("data.TaskScreenName", problem.TaskID)
 	form.Set("data.LanguageId", answer.Lang.AtCoderLangID())
 	form.Set("sourceCode", answer.Code)
 	form.Set("csrf_token", csrfToken)
-	return form
+	return &form
 }
 
 func (c *RESTClient) SubmitFile(filename, problemURL string) (*Submission, error) {
@@ -136,7 +138,7 @@ func (c *RESTClient) getIsJudgingLatestSubmission(resBody io.Reader) (bool, erro
 		return false, err
 	}
 	return doc.
-			Find("panel-submission").
+			Find(".panel-submission").
 			Find("table").
 			Find("tbody").
 			Find("tr:nth-child(1)").
@@ -164,15 +166,16 @@ func (c *RESTClient) extractFirstSubmission(resBody io.Reader) (*Submission, err
 		return nil, err
 	}
 
-	firstSubmissionRow := doc.Find("panel-submission").Find("table").Find("tbody").Find("tr:nth-child(1)")
+	firstSubmissionRow := doc.Find(".panel-submission").Find("table").Find("tbody").Find("tr:nth-child(1)")
 
 	codeLengthCell := firstSubmissionRow.Find("td:nth-child(6)")
 	statusCell := firstSubmissionRow.Find("td:nth-child(7)")
 
 	codeLength, err := strconv.Atoi(strings.Split(codeLengthCell.Text(), " ")[0])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse code length: %v", err)
 	}
+
 	status := NewSubmissionStatusFromText(statusCell.Find("span").Text())
 
 	if status != SubmissionStatusAC {
@@ -188,20 +191,23 @@ func (c *RESTClient) extractFirstSubmission(resBody io.Reader) (*Submission, err
 
 	timeScore, err := strconv.Atoi(strings.Split(timeScoreCell.Text(), " ")[0])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse time score: %v", err)
 	}
+
 	memoryScore, err := strconv.Atoi(strings.Split(memoryScoreCell.Text(), " ")[0])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse memory score: %v", err)
 	}
-	detailURL := strings.Split(detailURLCell.Text(), " ")[0]
+
+	detailURLPath, _ := detailURLCell.Find("a").First().Attr("href")
+	detailURL, _ := c.url.Parse(detailURLPath)
 
 	return &Submission{
 		Status:      status,
 		CodeLength:  codeLength,
-		TimeScore:   time.Duration(timeScore) * time.Millisecond,
+		TimeScore:   timeScore,
 		MemoryScore: memoryScore,
-		DetailUrl:   detailURL,
+		DetailUrl:   detailURL.String(),
 	}, nil
 }
 
@@ -218,7 +224,7 @@ func (c *RESTClient) getFirstSubmission(problem *Problem) (*Submission, error) {
 }
 
 func (c *RESTClient) Submit(answer *Answer, problem *Problem) (*Submission, error) {
-	// post answer
+	// get token
 	req, err := c.newRequest(http.MethodGet, problem.URL, nil)
 	if err != nil {
 		return nil, err
@@ -227,15 +233,19 @@ func (c *RESTClient) Submit(answer *Answer, problem *Problem) (*Submission, erro
 	if err != nil {
 		return nil, err
 	}
-	csrfToken, err := c.getCsrfToken(res.Body, "form .form-code-submit")
+
+	csrfToken, err := c.getCsrfToken(res.Body, ".form-code-submit")
 	if err != nil {
 		return nil, err
 	}
+
+	// post answer
 	submitForm := c.buildSubmitForm(answer, problem, csrfToken)
-	req, err = c.newRequest(http.MethodPost, problem.URL, strings.NewReader(submitForm.Encode()))
+	req, err = c.newRequest(http.MethodPost, problem.ActionPath(), strings.NewReader(submitForm.Encode()))
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	res, err = c.client.Do(req)
 	if err != nil {
 		return nil, err

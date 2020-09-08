@@ -3,7 +3,6 @@ package atcoder
 import (
 	"fmt"
 	"net/url"
-	"path"
 	"strings"
 )
 
@@ -27,8 +26,8 @@ func NewProblemFromURL(problemURL string) (*Problem, error) {
 	return &Problem{
 		BaseURL:   baseURL,
 		URL:       problemURL,
-		ContestID: parts[1],
-		TaskID:    parts[3],
+		ContestID: parts[2],
+		TaskID:    parts[4],
 	}, nil
 }
 
@@ -37,5 +36,5 @@ func (p *Problem) ActionPath() string {
 }
 
 func (p *Problem) SubmissionURL() string {
-	return path.Join(p.BaseURL.String(), fmt.Sprintf("/contests/%s/submissions", p.ContestID))
+	return p.BaseURL.String() + "/" + fmt.Sprintf("contests/%s/submissions/me", p.ContestID)
 }
