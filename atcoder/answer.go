@@ -2,38 +2,26 @@ package atcoder
 
 import (
 	"io/ioutil"
+	"path/filepath"
 )
-
-type Lang int
 
 const (
-	LangGo Lang = iota
+	LanguageIDGo = "4026"
 )
 
-var ext2lang = map[string]Lang{
-	".go": LangGo,
-}
-
-var lang2id = map[Lang]string{
-	LangGo: "4026",
-}
-
-func (l Lang) AtCoderLangID() string {
-	return lang2id[l]
+var ext2lang = map[string]string{
+	".go": LanguageIDGo,
 }
 
 type Answer struct {
-	Lang Lang
-	Code string
+	SourceCode string
+	LanguageID string
 }
 
-func NewAnswerFromFile(filename string) (*Answer, error) {
-	codeBytes, err := ioutil.ReadFile(filename)
+func ParseAnswerFile(filename string) (*Answer, error) {
+	sourceCode, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
-	return &Answer{
-		Lang: ext2lang[filename],
-		Code: string(codeBytes),
-	}, nil
+	return &Answer{SourceCode: string(sourceCode), LanguageID: ext2lang[filepath.Ext(filename)]}, nil
 }

@@ -4,8 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net/http"
+	"os"
 	"strconv"
+	"time"
 
 	"github.com/kzmshrt/acc/atcoder"
 	"github.com/urfave/cli/v2"
@@ -17,7 +18,7 @@ func Submit(c *cli.Context) error {
 	}
 
 	filename := c.Args().Get(0)
-	url := c.Args().Get(1)
+	taskURL := c.Args().Get(1)
 
 	// initialize client
 	client, err := atcoder.NewRESTClient()
@@ -26,24 +27,49 @@ func Submit(c *cli.Context) error {
 	}
 
 	// login
-	res, err := client.Authenticate()
-	if err != nil {
+	username := os.Getenv("ATCODER_USERNAME")
+	password := os.Getenv("ATCODER_PASSWORD")
+	if err := client.Authenticate(username, password); err != nil {
 		return fmt.Errorf("authentication failed: %v", err)
 	}
-	if res.StatusCode == http.StatusOK {
-		log.Printf("authentication succeeded: %s", res.Status)
-	} else {
-		log.Printf("authentication failed: %s", res.Status)
-	}
+
+	log.Printf("authentication completed.")
 
 	// submit
-	submission, err := client.SubmitFile(filename, url)
+	task, err := atcoder.ParseTaskURL(taskURL)
 	if err != nil {
-		return fmt.Errorf("submission failed: %v", err)
+		return fmt.Errorf("failed parsing task URL: %s: %v", taskURL, err)
+	}
+	answer, err := atcoder.ParseAnswerFile(filename)
+	if err != nil {
+		return fmt.Errorf("failed reading file content: %s: %v", filename, err)
+	}
+	if err := client.Submit(task, answer); err != nil {
+		return fmt.Errorf("failed submitting answer %v to task %v: %v", answer, task, err)
 	}
 
-	// submission
-	printSubmission(submission)
+	log.Printf("submission completed.")
+
+	// wait judging
+	submissions, err := client.ListSubmissions(task.ContestID)
+	if err != nil {
+		return fmt.Errorf("failed getting submissions: %v", err)
+	}
+
+	log.Printf("waiting judge...")
+
+	for submissions[0].Judge == atcoder.JudgeWJ {
+		time.Sleep(200 * time.Millisecond)
+
+		submissions, err = client.ListSubmissions(task.ContestID)
+		if err != nil {
+			return fmt.Errorf("failed getting submissions while waiting judge: %v", err)
+		}
+	}
+
+	log.Printf("judging completed.")
+
+	printSubmission(submissions[0])
 
 	return nil
 }
@@ -51,17 +77,17 @@ func Submit(c *cli.Context) error {
 func printSubmission(submission *atcoder.Submission) {
 	countDigits := func(x int) int { return len(strconv.Itoa(x)) }
 	maxDigitCount := 1
-	for _, v := range []int{submission.TimeScore, submission.MemoryScore, submission.CodeLength} {
+	for _, v := range []int{submission.TimeScore, submission.MemoryScore, submission.CodeSize} {
 		if c := countDigits(v); maxDigitCount < c {
 			maxDigitCount = c
 		}
 	}
 
-	fmt.Println("================================================================================")
-	fmt.Printf("Status:       %s\n", submission.Status)
-	fmt.Printf("Time Score:   %*d [ms]\n", maxDigitCount, submission.TimeScore)
-	fmt.Printf("Memory Score: %*d [KB]\n", maxDigitCount, submission.MemoryScore)
-	fmt.Printf("Code Length:  %*d [Byte]\n", maxDigitCount, submission.CodeLength)
-	fmt.Printf("Detail URL:   %s\n", submission.DetailUrl)
-	fmt.Println("================================================================================")
+	fmt.Printf("================================================================================\n")
+	fmt.Printf("Judge       : %s\n", submission.Judge)
+	fmt.Printf("Time Score  : %d [ms]\n", submission.TimeScore)
+	fmt.Printf("Memory Score: %d [KB]\n", submission.MemoryScore)
+	fmt.Printf("Code Length : %d [Byte]\n", submission.CodeSize)
+	fmt.Printf("Detail URL  : %s\n", submission.DetailURL)
+	fmt.Printf("================================================================================\n")
 }
