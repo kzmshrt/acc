@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/kzmshrt/acc/atcoder"
 	"github.com/urfave/cli/v2"
@@ -48,11 +49,19 @@ func Submit(c *cli.Context) error {
 }
 
 func printSubmission(submission *atcoder.Submission) {
+	countDigits := func(x int) int { return len(strconv.Itoa(x)) }
+	maxDigitCount := 1
+	for _, v := range []int{submission.TimeScore, submission.MemoryScore, submission.CodeLength} {
+		if c := countDigits(v); maxDigitCount < c {
+			maxDigitCount = c
+		}
+	}
+
 	fmt.Println("================================================================================")
 	fmt.Printf("Status:       %s\n", submission.Status)
-	fmt.Printf("Time Score:   %d [ms]\n", submission.TimeScore)
-	fmt.Printf("Memory Score: %d [KB]\n", submission.MemoryScore)
-	fmt.Printf("Code Length:  %d [Byte]\n", submission.CodeLength)
+	fmt.Printf("Time Score:   %*d [ms]\n", maxDigitCount, submission.TimeScore)
+	fmt.Printf("Memory Score: %*d [KB]\n", maxDigitCount, submission.MemoryScore)
+	fmt.Printf("Code Length:  %*d [Byte]\n", maxDigitCount, submission.CodeLength)
 	fmt.Printf("Detail URL:   %s\n", submission.DetailUrl)
 	fmt.Println("================================================================================")
 }

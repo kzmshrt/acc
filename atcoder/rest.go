@@ -143,8 +143,7 @@ func (c *RESTClient) getIsJudgingLatestSubmission(resBody io.Reader) (bool, erro
 			Find("tbody").
 			Find("tr:nth-child(1)").
 			Find("td:nth-child(7)").
-			Find("span").
-			HasClass("label-default"),
+			HasClass("waiting-judge"),
 		nil
 }
 
@@ -166,49 +165,47 @@ func (c *RESTClient) extractFirstSubmission(resBody io.Reader) (*Submission, err
 		return nil, err
 	}
 
-	firstSubmissionRow := doc.Find(".panel-submission").Find("table").Find("tbody").Find("tr:nth-child(1)")
+	firstSubmissionRow := doc.
+		Find(".panel-submission").
+		Find("table").
+		Find("tbody").
+		Find("tr:nth-child(1)")
 
 	codeLengthCell := firstSubmissionRow.Find("td:nth-child(6)")
-	statusCell := firstSubmissionRow.Find("td:nth-child(7)")
-
 	codeLength, err := strconv.Atoi(strings.Split(codeLengthCell.Text(), " ")[0])
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse code length: %v", err)
 	}
 
+	statusCell := firstSubmissionRow.Find("td:nth-child(7)")
 	status := NewSubmissionStatusFromText(statusCell.Find("span").Text())
 
-	if status != SubmissionStatusAC {
-		return &Submission{
-			CodeLength: codeLength,
-			Status:     status,
-		}, nil
+	switch status {
+	case SubmissionStatusAC, SubmissionStatusWA:
+		timeScoreCell := firstSubmissionRow.Find("td:nth-child(8)")
+		timeScore, err := strconv.Atoi(strings.Split(timeScoreCell.Text(), " ")[0])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse time score: %v", err)
+		}
+
+		memoryScoreCell := firstSubmissionRow.Find("td:nth-child(9)")
+		memoryScore, err := strconv.Atoi(strings.Split(memoryScoreCell.Text(), " ")[0])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse memory score: %v", err)
+		}
+
+		detailURLCell := firstSubmissionRow.Find("td:nth-child(10)")
+		detailURLPath, _ := detailURLCell.Find("a").First().Attr("href")
+		detailURL, _ := c.url.Parse(detailURLPath)
+
+		return &Submission{Status: status, CodeLength: codeLength, TimeScore: timeScore, MemoryScore: memoryScore, DetailUrl: detailURL.String()}, nil
+	default:
+		detailURLCell := firstSubmissionRow.Find("td:nth-child(8)")
+		detailURLPath, _ := detailURLCell.Find("a").First().Attr("href")
+		detailURL, _ := c.url.Parse(detailURLPath)
+
+		return &Submission{CodeLength: codeLength, Status: status, DetailUrl: detailURL.String()}, nil
 	}
-
-	timeScoreCell := firstSubmissionRow.Find("td:nth-child(8)")
-	memoryScoreCell := firstSubmissionRow.Find("td:nth-child(9)")
-	detailURLCell := firstSubmissionRow.Find("td:nth-child(10)")
-
-	timeScore, err := strconv.Atoi(strings.Split(timeScoreCell.Text(), " ")[0])
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse time score: %v", err)
-	}
-
-	memoryScore, err := strconv.Atoi(strings.Split(memoryScoreCell.Text(), " ")[0])
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse memory score: %v", err)
-	}
-
-	detailURLPath, _ := detailURLCell.Find("a").First().Attr("href")
-	detailURL, _ := c.url.Parse(detailURLPath)
-
-	return &Submission{
-		Status:      status,
-		CodeLength:  codeLength,
-		TimeScore:   timeScore,
-		MemoryScore: memoryScore,
-		DetailUrl:   detailURL.String(),
-	}, nil
 }
 
 func (c *RESTClient) getFirstSubmission(problem *Problem) (*Submission, error) {
@@ -257,7 +254,7 @@ func (c *RESTClient) Submit(answer *Answer, problem *Problem) (*Submission, erro
 		return nil, err
 	}
 	for judging {
-		time.Sleep(300 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
 		judging, err = c.getIsJudging(problem)
 		if err != nil {
 			return nil, err
