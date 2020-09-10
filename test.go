@@ -11,6 +11,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/logrusorgru/aurora"
+	"golang.org/x/net/html"
 )
 
 func Test(filename, url string) error {
@@ -28,6 +29,7 @@ func Test(filename, url string) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -37,36 +39,45 @@ type testCase struct {
 }
 
 func getTestCases(url string) ([]*testCase, error) {
-	res, err := http.Get(url)
+	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
 	}
-	defer res.Body.Close()
+	defer resp.Body.Close()
 
-	doc, err := goquery.NewDocumentFromReader(res.Body)
+	node, err := html.Parse(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	var testCases []*testCase
-	doc.Find(".part").
-		Each(func(i int, sel *goquery.Selection) {
-			switch {
-			case strings.Contains(sel.Text(), "入力例"):
-				sel2 := sel.Find("pre")
-				if sel2.Size() == 0 {
-					break
-				}
-				testCase := &testCase{Input: sel2.Text()}
-				testCases = append(testCases, testCase)
-			case strings.Contains(sel.Text(), "出力例"):
-				sel2 := sel.Find("pre")
-				if sel2.Size() == 0 {
-					break
-				}
-				testCases[len(testCases)-1].Output = sel2.Text()
-			}
-		})
+	doc := goquery.NewDocumentFromNode(node)
+
+	var inputs, outputs []string
+
+	doc.Find(".part").FilterFunction(func(_ int, s *goquery.Selection) bool {
+		return strings.Contains(s.Find("h3").Text(), "入力例")
+	}).Each(func(i int, s *goquery.Selection) {
+		inputs = append(inputs, s.Find("pre").Text())
+	})
+	doc.Find(".part").FilterFunction(func(_ int, s *goquery.Selection) bool {
+		return strings.Contains(s.Find("h3").Text(), "出力例")
+	}).Each(func(i int, s *goquery.Selection) {
+		outputs = append(outputs, s.Find("pre").Text())
+	})
+
+	if ni, no := len(inputs), len(outputs); ni != no {
+		return nil, fmt.Errorf("number of inputs and outputs does not match: (in, out) = (%d, %d)", ni, no)
+	}
+
+	testCases := make([]*testCase, len(inputs), len(inputs))
+
+	for i := range testCases {
+		testCases[i] = &testCase{
+			Input:  inputs[i],
+			Output: outputs[i],
+		}
+	}
+
 	return testCases, nil
 }
 
