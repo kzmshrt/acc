@@ -38,6 +38,15 @@ type testCase struct {
 	Output string
 }
 
+func containsInArray(s string, substrs []string) bool {
+	for _, substr := range substrs {
+		if strings.Contains(s, substr) {
+			return true
+		}
+	}
+	return false
+}
+
 func getTestCases(url string) ([]*testCase, error) {
 	resp, err := http.Get(url)
 	if err != nil {
@@ -54,13 +63,16 @@ func getTestCases(url string) ([]*testCase, error) {
 
 	var inputs, outputs []string
 
+	// input
 	doc.Find(".part").FilterFunction(func(_ int, s *goquery.Selection) bool {
-		return strings.Contains(s.Find("h3").Text(), "入力例")
+		return containsInArray(s.Find("h3").Text(), []string{"入力例", "Sample Input"})
 	}).Each(func(i int, s *goquery.Selection) {
 		inputs = append(inputs, s.Find("pre").Text())
 	})
+
+	// output
 	doc.Find(".part").FilterFunction(func(_ int, s *goquery.Selection) bool {
-		return strings.Contains(s.Find("h3").Text(), "出力例")
+		return containsInArray(s.Find("h3").Text(), []string{"出力例", "Sample Output"})
 	}).Each(func(i int, s *goquery.Selection) {
 		outputs = append(outputs, s.Find("pre").Text())
 	})
