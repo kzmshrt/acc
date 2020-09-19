@@ -73,7 +73,7 @@ func (t *SubmissionsMePageDocument) GetSubmissions() (submissions []*Submission,
 		submission.CodeSize = codeSize
 
 		switch judge {
-		case JudgeAC, JudgeWA:
+		case JudgeAC, JudgeWA, JudgeTLE, JudgeMLE, JudgeRE:
 			timeScore, err := strconv.Atoi(strings.Split(s.Find("td:nth-child(8)").Text(), " ")[0])
 			if err != nil {
 				return false
@@ -97,7 +97,7 @@ func (t *SubmissionsMePageDocument) GetSubmissions() (submissions []*Submission,
 				return false
 			}
 			submission.DetailURL = detailURL.String()
-		case JudgeWJ, JudgeTLE, JudgeMLE, JudgeRE, JudgeCE:
+		case JudgeWJ, JudgeCE:
 			detailURLPath, ok := s.Find("td:nth-child(8) > a").First().Attr("href")
 			if !ok {
 				err = fmt.Errorf("failed parsing detail URL")
