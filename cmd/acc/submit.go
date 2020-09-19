@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/kzmshrt/acc/atcoder"
@@ -75,14 +74,6 @@ func Submit(c *cli.Context) error {
 }
 
 func printSubmission(submission *atcoder.Submission) {
-	countDigits := func(x int) int { return len(strconv.Itoa(x)) }
-	maxDigitCount := 1
-	for _, v := range []int{submission.TimeScore, submission.MemoryScore, submission.CodeSize} {
-		if c := countDigits(v); maxDigitCount < c {
-			maxDigitCount = c
-		}
-	}
-
 	fmt.Printf("================================================================================\n")
 	fmt.Printf("Judge       : %s\n", submission.Judge)
 	fmt.Printf("Time Score  : %d [ms]\n", submission.TimeScore)
