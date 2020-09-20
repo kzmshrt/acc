@@ -3,11 +3,13 @@ package acc
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/logrusorgru/aurora"
@@ -54,7 +56,12 @@ func getTestCases(url string) ([]*testCase, error) {
 	}
 	defer resp.Body.Close()
 
-	node, err := html.Parse(resp.Body)
+	// prepare io.TeeReader
+	var r io.Reader = resp.Body
+	buf := bytes.NewBuffer(nil)
+	r = io.TeeReader(r, buf)
+
+	node, err := html.Parse(r)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +97,27 @@ func getTestCases(url string) ([]*testCase, error) {
 		}
 	}
 
+	// write html content to file
+	if err := saveFile(buf); err != nil {
+		return nil, fmt.Errorf("error while saving HTML to file: %v", err)
+	}
+
 	return testCases, nil
+}
+
+// saveFile save buffer content to file.
+// This function is used to check html content of AtCoder task page for debug.
+func saveFile(buf *bytes.Buffer) error {
+	filename := fmt.Sprintf("atcoder_task_doc_%s.html", time.Now().Format("2006-01-02-15-04-05"))
+	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+	_, err = file.WriteString(buf.String())
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func testGo(filename string, testCases []*testCase) error {
