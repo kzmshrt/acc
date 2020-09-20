@@ -1,11 +1,14 @@
 package atcoder
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os"
+	"time"
 
 	"golang.org/x/net/html"
 )
@@ -73,6 +76,7 @@ func (c *RESTClient) Authenticate(username, password string) error {
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
 	node, err := html.Parse(resp.Body)
 	if err != nil {
@@ -85,12 +89,57 @@ func (c *RESTClient) Authenticate(username, password string) error {
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("received %v response submitting login form", resp.StatusCode)
 	}
 
 	return nil
+}
+
+// saveFile save buffer content to file.
+// This function is used to check html content of AtCoder task page for debug.
+func saveFile(buf *bytes.Buffer) error {
+	filename := fmt.Sprintf("atcoder_task_doc_%s.html", time.Now().Format("2006-01-02-15-04-05"))
+	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+	_, err = file.WriteString(buf.String())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *RESTClient) GetTestCases(task *Task) ([]*TestCase, error) {
+	req, err := c.NewRequest(http.MethodGet, fmt.Sprintf(pathFormatTask, task.ContestID, task.TaskID), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.Client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	// prepare io.TeeReader
+	var r io.Reader = resp.Body
+	buf := bytes.NewBuffer(nil)
+	r = io.TeeReader(r, buf)
+
+	node, err := html.Parse(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// write html content to file
+	if err := saveFile(buf); err != nil {
+		return nil, fmt.Errorf("error while saving HTML to file: %v", err)
+	}
+
+	return NewTaskPageDocument(node).GetTestCases()
 }
 
 func (c *RESTClient) SubmitFile(taskURL, filename string) error {
@@ -123,6 +172,7 @@ func (c *RESTClient) Submit(task *Task, answer *Answer) error {
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
 	node, err := html.Parse(resp.Body)
 	if err != nil {
@@ -135,6 +185,7 @@ func (c *RESTClient) Submit(task *Task, answer *Answer) error {
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("received %v response submitting submit form", resp.StatusCode)
@@ -152,15 +203,12 @@ func (c *RESTClient) ListSubmissions(contestID string) ([]*Submission, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 
 	node, err := html.Parse(resp.Body)
 	if err != nil {
 		return nil, err
 	}
-	submissions, err := NewSubmissionsMePageDocument(node).GetSubmissions()
-	if err != nil {
-		return nil, err
-	}
 
-	return submissions, nil
+	return NewSubmissionsMePageDocument(node).GetSubmissions()
 }

@@ -37,8 +37,46 @@ func NewTaskPageDocument(root *html.Node) *TaskPageDocument {
 	}
 }
 
-func (t *TaskPageDocument) GetTaskCases() ([]*TestCase, error) {
-	return nil, nil
+func (t *TaskPageDocument) GetTestCases() ([]*TestCase, error) {
+	containsInArray := func(s string, substrs []string) bool {
+		for _, substr := range substrs {
+			if strings.Contains(s, substr) {
+				return true
+			}
+		}
+		return false
+	}
+
+	var inputs, outputs []string
+
+	// input
+	t.doc.Find(".part").FilterFunction(func(_ int, s *goquery.Selection) bool {
+		return containsInArray(s.Find("h3").Text(), []string{"入力例", "Sample Input"})
+	}).Each(func(i int, s *goquery.Selection) {
+		inputs = append(inputs, s.Find("pre").Text())
+	})
+
+	// output
+	t.doc.Find(".part").FilterFunction(func(_ int, s *goquery.Selection) bool {
+		return containsInArray(s.Find("h3").Text(), []string{"出力例", "Sample Output"})
+	}).Each(func(i int, s *goquery.Selection) {
+		outputs = append(outputs, s.Find("pre").Text())
+	})
+
+	if ni, no := len(inputs), len(outputs); ni != no {
+		return nil, fmt.Errorf("number of inputs and outputs does not match: (in, out) = (%d, %d)", ni, no)
+	}
+
+	testCases := make([]*TestCase, len(inputs), len(inputs))
+
+	for i := range testCases {
+		testCases[i] = &TestCase{
+			Input:  inputs[i],
+			Output: outputs[i],
+		}
+	}
+
+	return testCases, nil
 }
 
 func (t *TaskPageDocument) GetCSRFToken() (token string) {
@@ -57,10 +95,32 @@ func NewSubmissionsMePageDocument(root *html.Node) *SubmissionsMePageDocument {
 }
 
 func (t *SubmissionsMePageDocument) GetSubmissions() (submissions []*Submission, err error) {
+	decideJudge := func(s string) Judge {
+		switch s {
+		case "WJ":
+			return JudgeWJ
+		case "AC":
+			return JudgeAC
+		case "WA":
+			return JudgeWA
+		case "TLE":
+			return JudgeTLE
+		case "MLE":
+			return JudgeMLE
+		case "RE":
+			return JudgeRE
+		case "CE":
+			return JudgeCE
+		default:
+			return JudgeNA
+		}
+	}
+
 	t.doc.Find(".panel-submission").Find("table").Find("tbody").Find("tr").EachWithBreak(func(_ int, s *goquery.Selection) bool {
 		submission := new(Submission)
 
-		judge := strings.Split(s.Find("td:nth-child(7) > span").Text(), " ")[0]
+		judgeString := strings.Split(s.Find("td:nth-child(7) > span").Text(), " ")[0]
+		judge := decideJudge(judgeString)
 		if t.doc.Find(".panel-submission").Find("table").Find("tbody").Find("tr:nth-child(1)").Find("td:nth-child(7)").HasClass("waiting-judge") {
 			judge = JudgeWJ
 		}
